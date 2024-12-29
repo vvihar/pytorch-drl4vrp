@@ -9,17 +9,16 @@ __getitem__, which gets processed in trainer.py to be None
 
 """
 
-import os
+import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+
+matplotlib.use("Agg")
 
 
 class TSPDataset(Dataset):
-
     def __init__(self, size=50, num_samples=1e6, seed=None):
         super(TSPDataset, self).__init__()
 
@@ -76,19 +75,17 @@ def reward(static, tour_indices):
 def render(static, tour_indices, save_path):
     """Plots the found tours."""
 
-    plt.close('all')
+    plt.close("all")
 
     num_plots = 3 if int(np.sqrt(len(tour_indices))) >= 3 else 1
 
-    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots,
-                           sharex='col', sharey='row')
+    _, axes = plt.subplots(nrows=num_plots, ncols=num_plots, sharex="col", sharey="row")
 
     if num_plots == 1:
         axes = [[axes]]
     axes = [a for ax in axes for a in ax]
 
     for i, ax in enumerate(axes):
-
         # Convert the indices back into a tour
         idx = tour_indices[i]
         if len(idx.size()) == 1:
@@ -100,13 +97,13 @@ def render(static, tour_indices, save_path):
 
         data = torch.gather(static[i].data, 1, idx).cpu().numpy()
 
-        #plt.subplot(num_plots, num_plots, i + 1)
+        # plt.subplot(num_plots, num_plots, i + 1)
         ax.plot(data[0], data[1], zorder=1)
-        ax.scatter(data[0], data[1], s=4, c='r', zorder=2)
-        ax.scatter(data[0, 0], data[1, 0], s=20, c='k', marker='*', zorder=3)
+        ax.scatter(data[0], data[1], s=4, c="r", zorder=2)
+        ax.scatter(data[0, 0], data[1, 0], s=20, c="k", marker="*", zorder=3)
 
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
 
     plt.tight_layout()
-    plt.savefig(save_path, bbox_inches='tight', dpi=400)
+    plt.savefig(save_path, bbox_inches="tight", dpi=400)
