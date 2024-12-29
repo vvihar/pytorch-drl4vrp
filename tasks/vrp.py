@@ -152,7 +152,8 @@ def reward(static, tour_indices):
     # Euclidean distance between each consecutive point
     tour_len = torch.sqrt(torch.sum(torch.pow(y[:, :-1] - y[:, 1:], 2), dim=2))
 
-    return -tour_len.sum(1)
+    reward = tour_len.sum(1).detach()
+    return -reward  # NEGATIVE REWARD
 
 
 def render(static, tour_indices, save_path):
