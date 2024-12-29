@@ -131,7 +131,7 @@ class VehicleRoutingDataset(Dataset):
             all_demands[depot.nonzero().squeeze(), 0] = 0.0
 
         tensor = torch.cat((all_loads.unsqueeze(1), all_demands.unsqueeze(1)), 1)
-        return tensor.data.clone().detach()
+        return tensor.data.clone().detach().to(dynamic.device)
 
 
 def reward(static, tour_indices):
