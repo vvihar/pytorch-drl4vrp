@@ -12,6 +12,8 @@ import datetime
 import os
 import time
 
+import dotenv
+import neptune
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -19,6 +21,13 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from model import DRL4TSP, Encoder
+
+dotenv.load_dotenv()
+
+run = neptune.init_run(
+    project=os.environ.get("NEPTUNE_PROJECT"),
+    api_token=os.environ.get("NEPTUNE_API_TOKEN"),
+)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = torch.device('cpu')
@@ -249,6 +258,11 @@ def train(
             )
         )
 
+        # Report to Neptune
+        run["train/loss"].log(mean_loss)
+        run["train/reward"].log(mean_reward)
+        run["valid/reward"].log(mean_valid)
+
 
 def train_tsp(args):
     # Goals from paper:
@@ -302,6 +316,8 @@ def train_tsp(args):
     out = validate(test_loader, actor, tsp.reward, tsp.render, test_dir, num_plot=5)
 
     print("Average tour length: ", out)
+
+    run["test/reward"].log(out)
 
 
 def train_vrp(args):
@@ -368,6 +384,8 @@ def train_vrp(args):
 
     print("Average tour length: ", out)
 
+    run["test/reward"].log(out)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Combinatorial Optimization")
@@ -392,9 +410,20 @@ if __name__ == "__main__":
     # args.checkpoint = os.path.join('vrp', '10', '12_59_47.350165' + os.path.sep)
     # print(args.checkpoint)
 
+    params = vars(args)
+    run["parameters"] = {
+        **params,
+        "encoder": "Encoder",
+        "critic": "StateCritic",
+        "optimizer": "Adam",
+        "epochs": 20,
+    }
+
     if args.task == "tsp":
         train_tsp(args)
     elif args.task == "vrp":
         train_vrp(args)
     else:
         raise ValueError("Task <%s> not understood" % args.task)
+
+    run.stop()
