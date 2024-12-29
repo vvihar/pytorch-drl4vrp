@@ -246,8 +246,8 @@ class DRL4TSP(nn.Module):
                 # Since we compute the VRP in minibatches, some tours may have
                 # number of stops. We force the vehicles to remain at the depot
                 # in these cases, and logp := 0
-                is_done = dynamic[:, 1].sum(1).eq(0).float()
-                logp = logp * (1.0 - is_done)
+                is_done = dynamic[:, 1].sum(1).eq(0)
+                logp = logp * ~is_done
 
             # And update the mask so we don't re-visit if we don't need to
             if self.mask_fn is not None:
