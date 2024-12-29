@@ -1,9 +1,9 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#device = torch.device('cpu')
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device('cpu')
 
 
 class Encoder(nn.Module):
@@ -25,14 +25,17 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
 
         # W processes features from static decoder elements
-        self.v = nn.Parameter(torch.zeros((1, 1, hidden_size),
-                                          device=device, requires_grad=True))
+        self.v = nn.Parameter(
+            torch.zeros((1, 1, hidden_size), device=device, requires_grad=True)
+        )
 
-        self.W = nn.Parameter(torch.zeros((1, hidden_size, 3 * hidden_size),
-                                          device=device, requires_grad=True))
+        self.W = nn.Parameter(
+            torch.zeros(
+                (1, hidden_size, 3 * hidden_size), device=device, requires_grad=True
+            )
+        )
 
     def forward(self, static_hidden, dynamic_hidden, decoder_hidden):
-
         batch_size, hidden_size, _ = static_hidden.size()
 
         hidden = decoder_hidden.unsqueeze(2).expand_as(static_hidden)
@@ -57,23 +60,30 @@ class Pointer(nn.Module):
         self.num_layers = num_layers
 
         # Used to calculate probability of selecting next state
-        self.v = nn.Parameter(torch.zeros((1, 1, hidden_size),
-                                          device=device, requires_grad=True))
+        self.v = nn.Parameter(
+            torch.zeros((1, 1, hidden_size), device=device, requires_grad=True)
+        )
 
-        self.W = nn.Parameter(torch.zeros((1, hidden_size, 2 * hidden_size),
-                                          device=device, requires_grad=True))
+        self.W = nn.Parameter(
+            torch.zeros(
+                (1, hidden_size, 2 * hidden_size), device=device, requires_grad=True
+            )
+        )
 
         # Used to compute a representation of the current decoder output
-        self.gru = nn.GRU(hidden_size, hidden_size, num_layers,
-                          batch_first=True,
-                          dropout=dropout if num_layers > 1 else 0)
+        self.gru = nn.GRU(
+            hidden_size,
+            hidden_size,
+            num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0,
+        )
         self.encoder_attn = Attention(hidden_size)
 
         self.drop_rnn = nn.Dropout(p=dropout)
         self.drop_hh = nn.Dropout(p=dropout)
 
     def forward(self, static_hidden, dynamic_hidden, decoder_hidden, last_hh):
-
         rnn_out, last_hh = self.gru(decoder_hidden.transpose(2, 1), last_hh)
         rnn_out = rnn_out.squeeze(1)
 
@@ -81,7 +91,7 @@ class Pointer(nn.Module):
         rnn_out = self.drop_rnn(rnn_out)
         if self.num_layers == 1:
             # If > 1 layer dropout is already applied
-            last_hh = self.drop_hh(last_hh) 
+            last_hh = self.drop_hh(last_hh)
 
         # Given a summary of the output, find an  input context
         enc_attn = self.encoder_attn(static_hidden, dynamic_hidden, rnn_out)
@@ -130,13 +140,23 @@ class DRL4TSP(nn.Module):
         Defines the dropout rate for the decoder
     """
 
-    def __init__(self, static_size, dynamic_size, hidden_size,
-                 update_fn=None, mask_fn=None, num_layers=1, dropout=0.):
+    def __init__(
+        self,
+        static_size,
+        dynamic_size,
+        hidden_size,
+        update_fn=None,
+        mask_fn=None,
+        num_layers=1,
+        dropout=0.0,
+    ):
         super(DRL4TSP, self).__init__()
 
         if dynamic_size < 1:
-            raise ValueError(':param dynamic_size: must be > 0, even if the '
-                             'problem has no dynamic elements')
+            raise ValueError(
+                ":param dynamic_size: must be > 0, even if the "
+                "problem has no dynamic elements"
+            )
 
         self.update_fn = update_fn
         self.mask_fn = mask_fn
@@ -192,16 +212,15 @@ class DRL4TSP(nn.Module):
         dynamic_hidden = self.dynamic_encoder(dynamic)
 
         for _ in range(max_steps):
-
             if not mask.byte().any():
                 break
 
             # ... but compute a hidden rep for each element added to sequence
             decoder_hidden = self.decoder(decoder_input)
 
-            probs, last_hh = self.pointer(static_hidden,
-                                          dynamic_hidden,
-                                          decoder_hidden, last_hh)
+            probs, last_hh = self.pointer(
+                static_hidden, dynamic_hidden, decoder_hidden, last_hh
+            )
             probs = F.softmax(probs + mask.log(), dim=1)
 
             # When training, sample the next step according to its probability.
@@ -225,10 +244,10 @@ class DRL4TSP(nn.Module):
                 dynamic_hidden = self.dynamic_encoder(dynamic)
 
                 # Since we compute the VRP in minibatches, some tours may have
-                # number of stops. We force the vehicles to remain at the depot 
+                # number of stops. We force the vehicles to remain at the depot
                 # in these cases, and logp := 0
                 is_done = dynamic[:, 1].sum(1).eq(0).float()
-                logp = logp * (1. - is_done)
+                logp = logp * (1.0 - is_done)
 
             # And update the mask so we don't re-visit if we don't need to
             if self.mask_fn is not None:
@@ -237,9 +256,9 @@ class DRL4TSP(nn.Module):
             tour_logp.append(logp.unsqueeze(1))
             tour_idx.append(ptr.data.unsqueeze(1))
 
-            decoder_input = torch.gather(static, 2,
-                                         ptr.view(-1, 1, 1)
-                                         .expand(-1, input_size, 1)).detach()
+            decoder_input = torch.gather(
+                static, 2, ptr.view(-1, 1, 1).expand(-1, input_size, 1)
+            ).detach()
 
         tour_idx = torch.cat(tour_idx, dim=1)  # (batch_size, seq_len)
         tour_logp = torch.cat(tour_logp, dim=1)  # (batch_size, seq_len)
@@ -247,5 +266,5 @@ class DRL4TSP(nn.Module):
         return tour_idx, tour_logp
 
 
-if __name__ == '__main__':
-    raise Exception('Cannot be called from main')
+if __name__ == "__main__":
+    raise Exception("Cannot be called from main")
