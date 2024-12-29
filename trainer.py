@@ -225,9 +225,11 @@ def train(
 
         save_path = os.path.join(epoch_dir, "actor.pt")
         torch.save(actor.state_dict(), save_path)
+        run["checkpoints/actor"].upload(save_path)
 
         save_path = os.path.join(epoch_dir, "critic.pt")
         torch.save(critic.state_dict(), save_path)
+        run["checkpoints/critic"].upload(save_path)
 
         # Save rendering of validation set tours
         valid_dir = os.path.join(save_dir, "%s" % epoch)
@@ -242,9 +244,11 @@ def train(
 
             save_path = os.path.join(save_dir, "actor.pt")
             torch.save(actor.state_dict(), save_path)
+            run["best/actor"].upload(save_path)
 
             save_path = os.path.join(save_dir, "critic.pt")
             torch.save(critic.state_dict(), save_path)
+            run["best/critic"].upload(save_path)
 
         print(
             "Mean epoch loss/reward: %2.4f, %2.4f, %2.4f, took: %2.4fs "
