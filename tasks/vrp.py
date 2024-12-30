@@ -12,11 +12,20 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from structs import GRID_SIZE, Environment
+
 matplotlib.use("Agg")
 
 
 class VehicleRoutingDataset(Dataset):
-    def __init__(self, num_samples, input_size, max_load=20, max_demand=9, seed=None):
+    def __init__(
+        self,
+        num_samples: int,
+        input_size: int,
+        max_load=20,
+        max_demand=9,
+        seed: int | None = None,
+    ):
         super(VehicleRoutingDataset, self).__init__()
 
         if max_load < max_demand:
@@ -31,9 +40,22 @@ class VehicleRoutingDataset(Dataset):
         self.max_load = max_load
         self.max_demand = max_demand
 
+        self.environment = Environment()
+
         # Depot location will be the first node in each
-        locations = torch.rand((num_samples, 2, input_size + 1))
-        self.static = locations
+        # locations = torch.rand((num_samples, 2, input_size + 1))
+        # self.static = locations
+        # Depot location will be the first node in each sample
+        locations = [
+            self.environment.get_random_node()
+            for _ in range(num_samples * (input_size + 1))
+        ]
+        locations = torch.tensor(locations, dtype=torch.float32).view(
+            num_samples, 2, input_size + 1
+        )
+        self.static = (
+            locations / self.environment.grid_size
+        )  # Normalize locations to [0, 1]
 
         # All states will broadcast the drivers current load
         # Note that we only use a load between [0, 1] to prevent large
@@ -134,7 +156,7 @@ class VehicleRoutingDataset(Dataset):
         return tensor.data.clone().detach().to(dynamic.device)
 
 
-def reward(static, tour_indices):
+def reward(static: torch.Tensor, tour_indices: torch.Tensor) -> torch.Tensor:
     """
     Euclidean distance between all cities / nodes given by tour_indices
     """
@@ -149,14 +171,14 @@ def reward(static, tour_indices):
     start = static.data[:, :, 0].unsqueeze(1)
     y = torch.cat((start, tour, start), dim=1)
 
-    # Euclidean distance between each consecutive point
-    tour_len = torch.sqrt(torch.sum(torch.pow(y[:, :-1] - y[:, 1:], 2), dim=2))
+    # Manhattan distance between each consecutive point
+    tour_len = torch.sum(torch.abs(y[:, :-1] - y[:, 1:]), dim=2)
 
     return tour_len.sum(1).detach()
 
 
 def render(static, tour_indices, save_path):
-    """Plots the found solution."""
+    """Plots the found solution on the grid."""
 
     plt.close("all")
 
@@ -181,6 +203,15 @@ def render(static, tour_indices, save_path):
         x = np.hstack((start[0], data[0], start[0]))
         y = np.hstack((start[1], data[1], start[1]))
 
+        # Plot the grid
+        ax.set_xticks(np.arange(0, 1 + 1 / GRID_SIZE, 1 / GRID_SIZE))
+        ax.set_yticks(np.arange(0, 1 + 1 / GRID_SIZE, 1 / GRID_SIZE))
+        ax.grid(True)
+
+        # Normalize the coordinates for plotting
+        x = x * GRID_SIZE
+        y = y * GRID_SIZE
+
         # Assign each subtour a different colour & label in order traveled
         idx = np.hstack((0, tour_indices[i].cpu().numpy().flatten(), 0))
         where = np.where(idx == 0)[0]
@@ -189,7 +220,7 @@ def render(static, tour_indices, save_path):
             low = where[j]
             high = where[j + 1]
 
-            if low + 1 == high:
+            if low + 1 == high:  # No subtour
                 continue
 
             ax.plot(x[low : high + 1], y[low : high + 1], zorder=1, label=j)
@@ -198,8 +229,8 @@ def render(static, tour_indices, save_path):
         ax.scatter(x, y, s=4, c="r", zorder=2)
         ax.scatter(x[0], y[0], s=20, c="k", marker="*", zorder=3)
 
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
+        ax.set_xlim(0, GRID_SIZE)
+        ax.set_ylim(0, GRID_SIZE)
 
     plt.tight_layout()
     plt.savefig(save_path, bbox_inches="tight", dpi=200)
